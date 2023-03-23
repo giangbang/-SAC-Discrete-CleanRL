@@ -82,7 +82,7 @@ def make_env(env_id, seed, idx, capture_video, run_name):
         env.observation_space.seed(seed)
         return env
 
-    return 
+    return thunk
 
 def layer_init(layer, bias_const=0.0):
     nn.init.kaiming_normal_(layer.weight)
@@ -94,7 +94,7 @@ def layer_init(layer, bias_const=0.0):
 class SoftQNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
+        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, envs.single_action_space.n)
 
@@ -107,7 +107,7 @@ class SoftQNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, envs):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
+        self.fc1 = nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, envs.single_action_space.n)
         
