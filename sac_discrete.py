@@ -66,6 +66,9 @@ def parse_args():
         help="automatic tuning of the entropy coefficient")
     parser.add_argument("--target-entropy-scale", type=float, default=0.89,
         help="coefficient for scaling the autotune entropy target")
+
+    parser.add_argument("--eval-frequency", type=int, default=10_000,
+        help="the frequency of updates for the target networks")
     args = parser.parse_args()
     # fmt: on
     return args
@@ -126,6 +129,24 @@ class Actor(nn.Module):
         log_prob = F.log_softmax(logits, dim=1)
         return action, log_prob, action_probs
 
+def evaluate(envs, actor, device, n_episode = 100):
+    returns = [0] * n_episode
+    for i in range(n_episode):
+        obs = envs.reset()
+        done = False
+        while not done:
+            with torch.no_grad():
+                _, _, probs = actor.get_action(torch.Tensor(obs).to(device))
+                actions = probs.argmax(dim=-1)
+            next_obs, rewards, dones, infos = envs.step(actions)
+            done = dones[0]
+            for info in infos:
+                if "episode" in info.keys():
+                    returns[i] += info["episode"]["r"]
+                    assert done
+            obs = next_obs
+    return np.mean(returns)
+
 if __name__ == "__main__":
     args = parse_args()
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -158,6 +179,9 @@ if __name__ == "__main__":
     # env setup
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+    
+    # evaluate environments
+    test_envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
 
     actor = Actor(envs).to(device)
     qf1 = SoftQNetwork(envs).to(device)
@@ -277,6 +301,10 @@ if __name__ == "__main__":
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+
+            if global_step % args.eval_frequency == 0:
+                writer.add_scalar("eval/returns", 
+                    evaluate(test_envs, actor, device, 100), global_step)
 
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
