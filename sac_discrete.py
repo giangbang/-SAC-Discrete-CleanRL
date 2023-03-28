@@ -131,13 +131,14 @@ class Actor(nn.Module):
 
 def evaluate(envs, actor, device, n_episode = 100):
     returns = [0] * n_episode
+    assert len(returns) == n_episode
     for i in range(n_episode):
         obs = envs.reset()
         done = False
         while not done:
             with torch.no_grad():
                 _, _, probs = actor.get_action(torch.Tensor(obs).to(device))
-                actions = probs.argmax(dim=-1)
+                actions = probs.argmax(dim=-1).cpu().numpy()
             next_obs, rewards, dones, infos = envs.step(actions)
             done = dones[0]
             for info in infos:
@@ -211,6 +212,8 @@ if __name__ == "__main__":
         handle_timeout_termination=True,
     )
     start_time = time.time()
+
+    prev_eval = 0
 
     # TRY NOT TO MODIFY: start the game
     obs = envs.reset()
@@ -302,10 +305,6 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % args.eval_frequency == 0:
-                writer.add_scalar("eval/returns", 
-                    evaluate(test_envs, actor, device, 100), global_step)
-
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
@@ -321,6 +320,13 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     entropy = -(log_pi * action_probs).mean()
                     writer.add_scalar("losses/entropy", entropy.item(), global_step)
+
+
+        if global_step - prev_eval >= args.eval_frequency:
+            eval_results = evaluate(test_envs, actor, device, 100)
+            writer.add_scalar("eval/returns", eval_results, global_step)
+            prev_eval = global_step
+            print("global_step:", global_step, "| eval:", eval_results)
 
     envs.close()
     writer.close()
