@@ -328,5 +328,7 @@ if __name__ == "__main__":
             prev_eval = global_step
             print("global_step:", global_step, "| eval:", eval_results)
 
+    eval_results = evaluate(test_envs, actor, device, 100)
+    writer.add_scalar("eval/returns", eval_results, global_step)
     envs.close()
     writer.close()
